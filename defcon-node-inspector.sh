@@ -79,12 +79,11 @@ source /opt/defcon-node-inspector/env.sh
 mkdir -p "${STATE_DIR}/snapshots" "${STATE_DIR}/reports" "${LOG_DIR}"
 while true; do
   sudo -u "${DEFCON_USER}" python3 "${APP_DIR}/analyzer.py" \
-    --state-dir "${STATE_DIR}" \
-    --cli "${CLI_BIN}" \
-    --conf "${CONF_FILE}" \
-    --datadir "${DATA_DIR}" \
-    --port "${DEFCON_PORT}" \
-    --deep-scan "${DEEP_SCAN}" >> "${LOG_DIR}/analyzer.log" 2>&1 || true
+  --state-dir "${STATE_DIR}" \
+  --cli "${CLI_BIN}" \
+  --conf "${CONF_FILE}" \
+  --port "${DEFCON_PORT}" \
+  --deep-scan "${DEEP_SCAN}" >> "${LOG_DIR}/analyzer.log" 2>&1 || true
   sleep "${RUN_INTERVAL}"
 done
 RUNNER
@@ -607,12 +606,11 @@ run_once() {
   source "${APP_DIR}/env.sh"
   mkdir -p "${STATE_DIR}/snapshots" "${STATE_DIR}/reports" "${LOG_DIR}"
   sudo -u "${DEFCON_USER}" python3 "${APP_DIR}/analyzer.py" \
-    --state-dir "${STATE_DIR}" \
-    --cli "${CLI_BIN}" \
-    --conf "${CONF_FILE}" \
-    --datadir "${DATA_DIR}" \
-    --port "${DEFCON_PORT}" \
-    --deep-scan "${DEEP_SCAN}" | tee -a "${LOG_DIR}/manual-run.log"
+  --state-dir "${STATE_DIR}" \
+  --cli "${CLI_BIN}" \
+  --conf "${CONF_FILE}" \
+  --port "${DEFCON_PORT}" \
+  --deep-scan "${DEEP_SCAN}" | tee -a "${LOG_DIR}/manual-run.log"
 }
 
 check_requirements() {

@@ -10,18 +10,6 @@ The recommended one-liner to download and run the script is:
 bash <(curl -fsSL https://raw.githubusercontent.com/MrMarsellus/defcon-node-inspector/refs/heads/main/defcon-node-inspector.sh)
 ```
 
-## What is the `.tar.gz` for?
-
-The `defcon-node-inspector.tar.gz` file is just a packaged archive containing the script and the README. It is useful if you want to download the package first and extract it manually; on Linux, `.tar.gz` archives are commonly extracted with `tar -xf`. [1]
-
-Example:
-
-```bash
-tar -xf defcon-node-inspector.tar.gz
-cd defcon-node-inspector
-sudo bash defcon-node-inspector.sh
-```
-
 ## Quick workflow
 
 - Start the script.

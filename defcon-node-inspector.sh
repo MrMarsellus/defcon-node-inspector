@@ -739,6 +739,7 @@ menu() {
 install_app() {
   need_root
   mkdir_p "${APP_DIR}"; mkdir_p "${STATE_DIR}/snapshots"; mkdir_p "${STATE_DIR}/reports"; mkdir_p "${LOG_DIR}"
+  chown -R "${DEFCON_USER}:${DEFCON_USER}" "${STATE_DIR}" "${LOG_DIR}"
   write_env; write_runner; write_analyzer; write_service
   ln -sf "$0" "${MENU_LINK}"
   chmod +x "$0"

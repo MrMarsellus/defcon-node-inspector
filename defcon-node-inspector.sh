@@ -36,7 +36,7 @@ DEEP_SCAN="${DEEP_SCAN:-$DEFAULT_DEEP_SCAN}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 mkdir_p() { mkdir -p "$1"; }
-need_root() { [[ ${EUID} -eq 0 ]] || { echo -e "${RED}Bitte als root ausführen: sudo bash $0${NC}"; exit 1; }; }
+need_root() { [[ ${EUID} -eq 0 ]] || { echo -e "${RED}Please run as root: sudo bash $0${NC}"; exit 1; }; }
 info() { echo -e "${BLUE}[*]${NC} $*"; }
 ok() { echo -e "${GREEN}[OK]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -96,7 +96,7 @@ from pathlib import Path
 def run_cli(cli, *args):
     res = subprocess.run([cli] + list(args), capture_output=True, text=True)
     if res.returncode != 0:
-        raise RuntimeError(f"RPC Fehler: {' '.join([cli] + list(args))}\n{res.stderr.strip()}")
+        raise RuntimeError(f"RPC error: {' '.join([cli] + list(args))}\n{res.stderr.strip()}")
     txt = res.stdout.strip()
     if not txt:
         return None
@@ -249,24 +249,24 @@ def assess_node(row, by_owner, by_operator, by_ip, history):
     hist = history.get(node_id, {})
 
     if status == 'POSE_BANNED':
-        problems.append('Node ist aktuell POSE_BANNED.')
-        fixes.append('Service-IP/Port, Firewall und ProTx-Service-Adresse prüfen; nach Korrektur ggf. protx update_service bzw. Neustart durchführen.')
+        problems.append('Node is currently POSE_BANNED.')
+        fixes.append('Check service IP/port, firewall, and the ProTx service address; after fixing, use protx update_service or restart if needed.')
         score += 100; confidence = 'high'
     elif status and status != 'ENABLED':
-        problems.append(f'Node-Status ist nicht ENABLED, sondern {status}.')
-        fixes.append('Statusursache prüfen; Synchronisation, Erreichbarkeit und Rollen-/Key-Zuordnung kontrollieren.')
+        problems.append(f'Node status is not ENABLED but {status}.')
+        fixes.append('Check the root cause of the status; verify sync, reachability, and role/key assignment.')
         score += 30
 
     op = row.get('operator_pubkey')
     if op and len(by_operator.get(op, [])) > 1:
-        problems.append(f'Operator-Key wird bei {len(by_operator[op])} Nodes verwendet.')
-        fixes.append('Für jeden Node einen eindeutigen Operator-/BLS-Key verwenden und die betroffenen ProTx-/Node-Konfigurationen abgleichen.')
+        problems.append(f'Operator key is used by {len(by_operator[op])} nodes.')
+        fixes.append('Use a unique operator/BLS key for each node and compare the affected ProTx and node configurations.')
         score += 70; confidence = 'high'
 
     ip = row.get('service_ip')
     if ip and len(by_ip.get(ip, [])) > 1:
-        problems.append(f'Dieselbe Service-IP wird bei {len(by_ip[ip])} Nodes verwendet.')
-        fixes.append('Prüfen, ob dieselbe externe IP versehentlich mehrfach registriert wurde oder NAT/Copy-Paste-Fehler vorliegen.')
+        problems.append(f'The same service IP is used by {len(by_ip[ip])} nodes.')
+        fixes.append('Check whether the same external IP was accidentally registered multiple times or whether a NAT/copy-paste mistake exists.')
         score += 50
         if confidence != 'high': confidence = 'medium'
 
@@ -275,33 +275,33 @@ def assess_node(row, by_owner, by_operator, by_ip, history):
         total = len(by_owner[owner])
         banned = sum(1 for x in by_owner[owner] if (x.get('status') or '').upper() == 'POSE_BANNED')
         if total >= 2 and banned >= max(2, total // 2):
-            problems.append(f'Owner-Adresse hat {banned} von {total} Nodes im Status POSE_BANNED.')
-            fixes.append('Alle Nodes dieses Owners gemeinsam prüfen: externe IP, ProTx-Service-Adresse, Operator-Key und Collateral-Zuordnung vergleichen.')
+            problems.append(f'Owner address has {banned} of {total} nodes in POSE_BANNED state.')
+            fixes.append('Review all nodes of this owner together: compare external IP, ProTx service address, operator key, and collateral mapping.')
             score += 40
             if confidence == 'low': confidence = 'medium'
 
     if row.get('source_protx') and not row.get('source_masternodelist'):
-        problems.append('Node erscheint in protx list valid, aber nicht sauber in masternodelist json.')
-        fixes.append('Node-Status, Synchronisation und Registrierung prüfen; ggf. ist der lokale Node noch nicht vollständig synchron oder der Eintrag ist inkonsistent.')
+        problems.append('Node appears in protx list valid but not cleanly in masternodelist json.')
+        fixes.append('Check node status, sync state, and registration; the local node may not be fully synced yet or the entry may be inconsistent.')
         score += 25
 
     reg_service = row.get('registered_service')
     if reg_service and row.get('service') and reg_service != row.get('service'):
-        problems.append(f"Abweichung zwischen masternodelist-Service ({row.get('service')}) und protx info-Service ({reg_service}).")
-        fixes.append('ProTx-Service-Adresse und laufende Node-Konfiguration vergleichen; bei falscher Registrierung ggf. protx update_service verwenden.')
+        problems.append(f"Mismatch between masternodelist service ({row.get('service')}) and protx info service ({reg_service}).")
+        fixes.append('Compare the ProTx service address with the running node configuration; if the registration is wrong, use protx update_service if needed.')
         score += 55
         if confidence == 'low': confidence = 'medium'
 
     reg_owner = row.get('registered_owner_address')
     if reg_owner and row.get('owner_address') and reg_owner != row.get('owner_address'):
-        problems.append('Owner-Adresse aus protx info weicht von masternodelist ab.')
-        fixes.append('Owner-Zuordnung prüfen; lokale Sicht, Registrierung und eventuelle Fork-spezifische Feldnamen vergleichen.')
+        problems.append('Owner-Adresse aus protx info weicht of masternodelist ab.')
+        fixes.append('Check owner mapping; compare local view, registration, and any fork-specific field names.')
         score += 30
 
     reg_op = row.get('registered_operator_pubkey')
     if reg_op and row.get('operator_pubkey') and reg_op != row.get('operator_pubkey'):
-        problems.append('Operator-Key aus protx info weicht von masternodelist ab.')
-        fixes.append('Operator-Key/BLS-Key und ProTx-Daten prüfen; bei Operator-Wechsel Reihenfolge von ProUpRegTx/ProUpServTx kontrollieren.')
+        problems.append('Operator-Key aus protx info weicht of masternodelist ab.')
+        fixes.append('Check operator/BLS key and ProTx data; when the operator changed, verify the order of ProUpRegTx and ProUpServTx.')
         score += 45
         if confidence == 'low': confidence = 'medium'
 
@@ -310,8 +310,8 @@ def assess_node(row, by_owner, by_operator, by_ip, history):
     if prev_status and status and prev_status != status:
         flips += 1
     if flips >= 3:
-        problems.append(f'Node zeigt Status-Flapping mit bereits {flips} Statuswechseln in der Historie.')
-        fixes.append('Instabilität prüfen: Netzwerk, Neustarts, falsche Service-IP oder inkonsistente Masternode-Konfiguration.')
+        problems.append(f'Node shows status flapping with already {flips} status changes in history.')
+        fixes.append('Check for instability: network issues, restarts, wrong service IP, or inconsistent masternode configuration.')
         score += 35
         if confidence == 'low': confidence = 'medium'
 
@@ -332,11 +332,11 @@ def write_text_report(path, summary, problem_nodes, owner_groups, operator_group
     lines = [
         'DeFCoN Node Inspector Report',
         '================================',
-        f"Zeitpunkt UTC: {summary['timestamp']}",
-        f"Gesamtzahl Nodes: {summary['total_nodes']}",
-        f"Problematische Nodes: {summary['problem_nodes']}",
+        f"Timestamp UTC: {summary['timestamp']}",
+        f"Total nodes: {summary['total_nodes']}",
+        f"Problematic nodes: {summary['problem_nodes']}",
         f"POSE_BANNED: {summary['pose_banned']}",
-        '', 'Problem-Nodes', '--------------------------------'
+        '', 'Problem nodes', '--------------------------------'
     ]
     for row in problem_nodes:
         lines.append(f"Node: {row.get('protx_hash') or row.get('outpoint') or row.get('service')}")
@@ -348,14 +348,14 @@ def write_text_report(path, summary, problem_nodes, owner_groups, operator_group
         for p in row.get('problems', []): lines.append(f"  Problem: {p}")
         for f in row.get('recommended_fix', []): lines.append(f"  Fix: {f}")
         lines.append('')
-    lines += ['', 'Verdächtige Owner-Gruppen', '--------------------------------']
+    lines += ['', 'Suspicious owner groups', '--------------------------------']
     for item in owner_groups:
         lines.append(f"{item['owner_address']} -> {item['pose_banned']}/{item['total_nodes']} POSE_BANNED")
-    lines += ['', 'Mehrfach genutzte Operator-Keys', '--------------------------------']
+    lines += ['', 'Reused operator keys', '--------------------------------']
     for key, items in operator_groups.items():
         ids = ', '.join([x.get('protx_hash') or x.get('outpoint') or '?' for x in items])
         lines.append(f"{key} -> {len(items)} Nodes -> {ids}")
-    lines += ['', 'Mehrfach genutzte Service-IPs', '--------------------------------']
+    lines += ['', 'Reused service IPs', '--------------------------------']
     for key, items in ip_groups.items():
         ids = ', '.join([x.get('protx_hash') or x.get('outpoint') or '?' for x in items])
         lines.append(f"{key} -> {len(items)} Nodes -> {ids}")
@@ -388,8 +388,8 @@ def write_html_report(path, summary, problem_nodes, owner_groups, operator_group
           </div>
           <p><strong>Owner:</strong> {esc(r.get('owner_address'))}<br><strong>Operator:</strong> {esc(r.get('operator_pubkey'))}</p>
           <div class="cols">
-            <div><h4>Warum verdächtig</h4><ul>{problems}</ul></div>
-            <div><h4>Was ändern</h4><ul>{fixes}</ul></div>
+            <div><h4>Why suspicious</h4><ul>{problems}</ul></div>
+            <div><h4>What to change</h4><ul>{fixes}</ul></div>
           </div>
         </div>
         ''')
@@ -427,13 +427,13 @@ ul {{ margin:8px 0 0 18px; }}
   <p>Snapshot UTC: {esc(summary['timestamp'])}</p>
   <div class="grid">{''.join(cards)}</div>
   <div class="section">
-    <h2>Problem-Nodes</h2>
-    {''.join(rows_html) if rows_html else '<div class="panel">Keine problematischen Nodes gefunden.</div>'}
+    <h2>Problem nodes</h2>
+    {''.join(rows_html) if rows_html else '<div class="panel">None problematischen Nodes gefunden.</div>'}
   </div>
   <div class="section smallgrid">
-    <div class="panel"><h2>Verdächtige Owner</h2><ul>{owner_html or '<li>Keine</li>'}</ul></div>
-    <div class="panel"><h2>Operator-Dubletten</h2><ul>{op_html or '<li>Keine</li>'}</ul></div>
-    <div class="panel"><h2>Service-IP-Dubletten</h2><ul>{ip_html or '<li>Keine</li>'}</ul></div>
+    <div class="panel"><h2>Verdächtige Owner</h2><ul>{owner_html or '<li>None</li>'}</ul></div>
+    <div class="panel"><h2>Operator-Dubletten</h2><ul>{op_html or '<li>None</li>'}</ul></div>
+    <div class="panel"><h2>Service-IP-Dubletten</h2><ul>{ip_html or '<li>None</li>'}</ul></div>
   </div>
 </div>
 </body>
@@ -506,11 +506,11 @@ def main():
 
     save_json(snapshots_dir / f'snapshot-{timestamp}.json', assessed)
     save_json(reports_dir / 'latest-summary.json', summary)
-    save_json(reports_dir / 'problem-nodes.json', problem_nodes)
+    save_json(reports_dir / 'problem nodes.json', problem_nodes)
     save_json(reports_dir / 'owner-groups.json', owner_groups)
     save_json(reports_dir / 'duplicate-operators.json', operator_groups)
     save_json(reports_dir / 'duplicate-ips.json', ip_groups)
-    write_csv(reports_dir / 'problem-nodes.csv', problem_nodes)
+    write_csv(reports_dir / 'problem nodes.csv', problem_nodes)
     write_text_report(reports_dir / 'latest-summary.txt', summary, problem_nodes, owner_groups, operator_groups, ip_groups)
     write_html_report(reports_dir / 'latest-report.html', summary, problem_nodes, owner_groups, operator_groups, ip_groups)
     save_json(history_path, history)
@@ -546,20 +546,20 @@ command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload || true
 show_reports() {
   source "${APP_DIR}/env.sh"
   local report="${STATE_DIR}/reports/latest-summary.txt"
-  [[ -f "$report" ]] && sed -n '1,240p' "$report" || warn "Noch kein Report vorhanden."
+  [[ -f "$report" ]] && sed -n '1,240p' "$report" || warn "No report available yet."
 }
 
 show_problem_nodes_json() {
   source "${APP_DIR}/env.sh"
-  local file="${STATE_DIR}/reports/problem-nodes.json"
+  local file="${STATE_DIR}/reports/problem nodes.json"
   if [[ -f "$file" ]]; then
     python3 - <<PY
 import json
 from pathlib import Path
-p = Path("${STATE_DIR}/reports/problem-nodes.json")
+p = Path("${STATE_DIR}/reports/problem nodes.json")
 rows = json.loads(p.read_text())
 if not rows:
-    print("Keine problematischen Nodes gefunden.")
+    print("None problematischen Nodes gefunden.")
 else:
     for i, r in enumerate(rows, 1):
         print(f"[{i}] {(r.get('protx_hash') or r.get('outpoint') or r.get('service'))}")
@@ -573,7 +573,7 @@ else:
         print()
 PY
   else
-    warn "Noch keine Problem-Node-Liste vorhanden."
+    warn "No problem node list available yet."
   fi
 }
 
@@ -585,16 +585,16 @@ run_once() {
 
 check_requirements() {
   source "${APP_DIR}/env.sh"
-  info "Prüfe Voraussetzungen..."
-  [[ -x "${CLI_BIN}" ]] && ok "CLI gefunden: ${CLI_BIN}" || err "CLI nicht gefunden: ${CLI_BIN}"
-  [[ -x "${DAEMON_BIN}" ]] && ok "Daemon gefunden: ${DAEMON_BIN}" || err "Daemon nicht gefunden: ${DAEMON_BIN}"
-  [[ -f "${CONF_FILE}" ]] && ok "Config gefunden: ${CONF_FILE}" || err "Config nicht gefunden: ${CONF_FILE}"
+  info "Checking requirements..."
+  [[ -x "${CLI_BIN}" ]] && ok "CLI found: ${CLI_BIN}" || err "CLI not found: ${CLI_BIN}"
+  [[ -x "${DAEMON_BIN}" ]] && ok "Daemon found: ${DAEMON_BIN}" || err "Daemon not found: ${DAEMON_BIN}"
+  [[ -f "${CONF_FILE}" ]] && ok "Config found: ${CONF_FILE}" || err "Config not found: ${CONF_FILE}"
   if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet "${DEFCON_SERVICE}"; then ok "Service ${DEFCON_SERVICE} läuft"; else warn "Service ${DEFCON_SERVICE} läuft nicht"; fi
+    if systemctl is-active --quiet "${DEFCON_SERVICE}"; then ok "Service ${DEFCON_SERVICE} is running"; else warn "Service ${DEFCON_SERVICE} is running nicht"; fi
   fi
   if [[ -x "${CLI_BIN}" ]]; then
     set +e; "${CLI_BIN}" getblockcount >/dev/null 2>&1
-    [[ $? -eq 0 ]] && ok "RPC antwortet auf getblockcount" || warn "RPC antwortet nicht auf getblockcount"
+    [[ $? -eq 0 ]] && ok "RPC responds to getblockcount" || warn "RPC does not respond to getblockcount"
     set -e
   fi
 }
@@ -604,18 +604,18 @@ start_background() {
   mkdir -p "${LOG_DIR}" "${STATE_DIR}"
   if command -v systemctl >/dev/null 2>&1; then
     systemctl enable --now "${APP_NAME}.service"
-    ok "Hintergrund-Analyse via systemd gestartet."
+    ok "Background analysis started via systemd."
   else
-    if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then warn "Analyse läuft bereits mit PID $(cat "${PID_FILE}")"; return; fi
+    if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then warn "Analyse is running bereits mit PID $(cat "${PID_FILE}")"; return; fi
     nohup "${RUNNER_PATH}" >> "${NOHUP_LOG}" 2>&1 &
     echo $! > "${PID_FILE}"
-    ok "Hintergrund-Analyse via nohup gestartet. PID $(cat "${PID_FILE}")"
+    ok "Background analysis started via nohup. PID $(cat "${PID_FILE}")"
   fi
 }
 
 stop_background() {
   source "${APP_DIR}/env.sh"
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}.service"; then systemctl stop "${APP_NAME}.service" || true; ok "Hintergrund-Analyse gestoppt."; fi
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}.service"; then systemctl stop "${APP_NAME}.service" || true; ok "Background analysis stopped."; fi
   if [[ -f "${PID_FILE}" ]]; then
     pid="$(cat "${PID_FILE}")"
     kill -0 "$pid" 2>/dev/null && kill "$pid" || true
@@ -628,9 +628,9 @@ status_background() {
   if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}.service"; then
     systemctl --no-pager --full status "${APP_NAME}.service" || true
   elif [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
-    info "Läuft via nohup mit PID $(cat "${PID_FILE}")"
+    info "Running via nohup with PID $(cat "${PID_FILE}")"
   else
-    warn "Keine laufende Hintergrund-Analyse gefunden."
+    warn "None laufende Hintergrund-Analyse gefunden."
   fi
 }
 
@@ -641,7 +641,7 @@ APP_DIR: ${APP_DIR}
 STATE_DIR: ${STATE_DIR}
 LOG_DIR: ${LOG_DIR}
 Reports: ${STATE_DIR}/reports
-HTML-Report: ${STATE_DIR}/reports/latest-report.html
+HTML report: ${STATE_DIR}/reports/latest-report.html
 Snapshots: ${STATE_DIR}/snapshots
 Logs: ${LOG_DIR}
 PATHS
@@ -650,14 +650,14 @@ PATHS
 wipe_all_data() {
   source "${APP_DIR}/env.sh"
   echo
-  warn "Dies löscht ALLE gespeicherten Snapshots, Reports, Logs und die Historie von ${APP_NAME}."
-  read -rp "Zum Bestätigen genau DELETE eingeben: " confirm
+  warn "This will delete ALL stored snapshots, reports, logs, and history for ${APP_NAME}."
+  read -rp "Type DELETE exactly to confirm: " confirm
   if [[ "$confirm" == "DELETE" ]]; then
     rm -rf "${STATE_DIR:?}/snapshots"/* "${STATE_DIR:?}/reports"/* "${LOG_DIR:?}"/*
     rm -f "${STATE_DIR}/history.json" "${STATE_DIR}/latest-error.txt" "${PID_FILE}"
-    ok "Alle gespeicherten Daten wurden gelöscht."
+    ok "All stored data has been deleted."
   else
-    warn "Abgebrochen."
+    warn "Cancelled."
   fi
 }
 
@@ -667,18 +667,18 @@ menu() {
     echo -e "${BLUE}===============================${NC}"
     echo -e "${BLUE} DeFCoN Node Inspector v2${NC}"
     echo -e "${BLUE}===============================${NC}"
-    echo "1) Voraussetzungen prüfen"
-    echo "2) Einmalige Analyse ausführen"
-    echo "3) Analyse im Hintergrund starten"
-    echo "4) Analyse im Hintergrund stoppen"
-    echo "5) Status anzeigen"
-    echo "6) Letzte Auswertung anzeigen"
-    echo "7) Problem-Nodes anzeigen"
-    echo "8) Report-/Log-Pfade anzeigen"
-    echo "9) Alle gespeicherten Daten löschen"
-    echo "0) Beenden"
+    echo "1) Check requirements"
+    echo "2) Run one-time analysis"
+    echo "3) Start background analysis"
+    echo "4) Stop background analysis"
+    echo "5) Show status"
+    echo "6) Show latest report"
+    echo "7) Problem nodes anzeigen"
+    echo "8) Show report/log paths"
+    echo "9) Delete all stored data"
+    echo "0) Exit"
     echo
-    read -rp "Auswahl: " choice
+    read -rp "Selection: " choice
     case "$choice" in
       1) check_requirements ;;
       2) run_once ;;
@@ -690,7 +690,7 @@ menu() {
       8) show_paths ;;
       9) wipe_all_data ;;
       0) exit 0 ;;
-      *) warn "Ungültige Auswahl." ;;
+      *) warn "Invalid selection." ;;
     esac
   done
 }
@@ -701,13 +701,13 @@ install_app() {
   write_env; write_runner; write_analyzer; write_service
   ln -sf "$0" "${MENU_LINK}"
   chmod +x "$0"
-  ok "Installation abgeschlossen."
+  ok "Installation completed."
 }
 
 usage() {
 cat <<USAGE
-Verwendung:
-  bash defcon-node-inspector.sh                # installiert bei erstem Lauf und zeigt Menü
+Usage:
+  bash defcon-node-inspector.sh                # installs on first run and shows the menu
   bash defcon-node-inspector.sh menu
   bash defcon-node-inspector.sh install
   bash defcon-node-inspector.sh run-once

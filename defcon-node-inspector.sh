@@ -1146,20 +1146,19 @@ start_background() {
 stop_background() {
   source "${APP_DIR}/env.sh"
 
-  local stopped_any=0
+  local had_running=0
 
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}.service"; then
+  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --type=service | grep -q "^${APP_NAME}.service"; then
     if systemctl is-active --quiet "${APP_NAME}.service"; then
+      had_running=1
       systemctl stop "${APP_NAME}.service" || true
       sleep 1
       if systemctl is-active --quiet "${APP_NAME}.service"; then
         warn "Tried to stop ${APP_NAME}.service, but it is still running."
       else
         ok "Background analysis stopped via systemd."
-        stopped_any=1
       fi
-    else
-      warn "Systemd service ${APP_NAME}.service is already stopped."
+      return
     fi
   fi
 
@@ -1167,22 +1166,22 @@ stop_background() {
     local pid
     pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      had_running=1
       kill "${pid}" || true
       sleep 1
       if kill -0 "${pid}" 2>/dev/null; then
         warn "Tried to stop nohup process PID ${pid}, but it is still running."
       else
         ok "Background analysis stopped via nohup (PID ${pid})."
-        stopped_any=1
       fi
-    else
-      warn "PID file exists, but no running nohup process was found."
+      rm -f "${PID_FILE}"
+      return
     fi
     rm -f "${PID_FILE}"
   fi
 
-  if [[ "${stopped_any}" -eq 0 ]]; then
-    warn "No running background analysis was stopped."
+  if [[ "${had_running}" -eq 0 ]]; then
+    warn "No running background analysis found."
   fi
 }
 

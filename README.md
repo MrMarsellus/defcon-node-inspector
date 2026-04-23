@@ -18,6 +18,10 @@ sudo bash -c '
 '
 ```
 
+```bash
+sudo /usr/local/bin/defcon-node-inspector menu
+```
+
 ## What it analyzes
 
 The tool combines public RPC data to detect:

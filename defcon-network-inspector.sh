@@ -1146,11 +1146,8 @@ start_background() {
 stop_background() {
   source "${APP_DIR}/env.sh"
 
-  local had_running=0
-
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --type=service | grep -q "^${APP_NAME}.service"; then
+  if command -v systemctl >/dev/null 2>&1; then
     if systemctl is-active --quiet "${APP_NAME}.service"; then
-      had_running=1
       systemctl stop "${APP_NAME}.service" || true
       sleep 1
       if systemctl is-active --quiet "${APP_NAME}.service"; then
@@ -1166,7 +1163,6 @@ stop_background() {
     local pid
     pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-      had_running=1
       kill "${pid}" || true
       sleep 1
       if kill -0 "${pid}" 2>/dev/null; then
@@ -1180,51 +1176,49 @@ stop_background() {
     rm -f "${PID_FILE}"
   fi
 
-  if [[ "${had_running}" -eq 0 ]]; then
-    warn "No running background analysis found."
-  fi
+  warn "No running background analysis found."
 }
 
 status_background() {
   source "${APP_DIR}/env.sh"
 
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q "^${APP_NAME}.service"; then
-    local active enabled substate pid start_ts start_epoch now_epoch uptime_sec uptime_human mem task state
-
+  if command -v systemctl >/dev/null 2>&1; then
+    local active enabled substate pid startts startepoch nowepoch uptimesec uptimehuman mem task state
     active="$(systemctl is-active "${APP_NAME}.service" 2>/dev/null || true)"
     enabled="$(systemctl is-enabled "${APP_NAME}.service" 2>/dev/null || true)"
     substate="$(systemctl show -p SubState --value "${APP_NAME}.service" 2>/dev/null || true)"
     pid="$(systemctl show -p ExecMainPID --value "${APP_NAME}.service" 2>/dev/null || true)"
-    start_ts="$(systemctl show -p ActiveEnterTimestamp --value "${APP_NAME}.service" 2>/dev/null || true)"
+    startts="$(systemctl show -p ActiveEnterTimestamp --value "${APP_NAME}.service" 2>/dev/null || true)"
     task="$(systemctl show -p TasksCurrent --value "${APP_NAME}.service" 2>/dev/null || true)"
     mem="$(systemctl show -p MemoryCurrent --value "${APP_NAME}.service" 2>/dev/null || true)"
     state="$(systemctl show -p ActiveState --value "${APP_NAME}.service" 2>/dev/null || true)"
 
     if [[ "${active}" == "active" ]]; then
-      now_epoch="$(date +%s)"
-      start_epoch=""
-      uptime_sec=""
-      uptime_human="unknown"
+      nowepoch="$(date +%s)"
+      startepoch=""
+      uptimesec=""
+      uptimehuman="unknown"
 
-      if [[ -n "${start_ts}" ]]; then
-        start_epoch="$(date -d "${start_ts}" +%s 2>/dev/null || true)"
+      if [[ -n "${startts}" ]]; then
+        startepoch="$(date -d "${startts}" +%s 2>/dev/null || true)"
       fi
 
-      if [[ -n "${start_epoch}" ]]; then
-        uptime_sec=$(( now_epoch - start_epoch ))
+      if [[ -n "${startepoch}" ]]; then
+        uptimesec=$(( nowepoch - startepoch ))
         local d h m s
-        d=$(( uptime_sec / 86400 ))
-        h=$(( (uptime_sec % 86400) / 3600 ))
-        m=$(( (uptime_sec % 3600) / 60 ))
-        s=$(( uptime_sec % 60 ))
+        d=$(( uptimesec / 86400 ))
+        h=$(( (uptimesec % 86400) / 3600 ))
+        m=$(( (uptimesec % 3600) / 60 ))
+        s=$(( uptimesec % 60 ))
+
         if (( d > 0 )); then
-          uptime_human="${d}d ${h}h ${m}m ${s}s"
+          uptimehuman="${d}d ${h}h ${m}m ${s}s"
         elif (( h > 0 )); then
-          uptime_human="${h}h ${m}m ${s}s"
+          uptimehuman="${h}h ${m}m ${s}s"
         elif (( m > 0 )); then
-          uptime_human="${m}m ${s}s"
+          uptimehuman="${m}m ${s}s"
         else
-          uptime_human="${s}s"
+          uptimehuman="${s}s"
         fi
       fi
 
@@ -1234,12 +1228,12 @@ status_background() {
 
       ok "Background analysis is running via systemd."
       echo "Service: ${APP_NAME}.service"
-      echo "ActiveState: ${state}"
-      echo "SubState: ${substate}"
-      echo "Enabled: ${enabled}"
-      echo "Main PID: ${pid}"
-      echo "Started: ${start_ts}"
-      echo "Uptime: ${uptime_human}"
+      echo "ActiveState: ${state:-unknown}"
+      echo "SubState: ${substate:-unknown}"
+      echo "Enabled: ${enabled:-unknown}"
+      echo "Main PID: ${pid:-unknown}"
+      echo "Started: ${startts:-unknown}"
+      echo "Uptime: ${uptimehuman}"
       echo "Tasks: ${task:-unknown}"
       echo "Memory: ${mem:-unknown}"
       echo
@@ -1248,51 +1242,56 @@ status_background() {
       return
     fi
 
-    warn "Service exists but is not currently running."
-    echo "Service: ${APP_NAME}.service"
-    echo "ActiveState: ${state:-unknown}"
-    echo "is-active: ${active:-unknown}"
-    echo "Enabled: ${enabled:-unknown}"
-    echo
-    echo "Last log lines:"
-    journalctl -u "${APP_NAME}.service" -n 20 --no-pager 2>/dev/null || true
-    return
+    if [[ -n "${state}" || -n "${enabled}" || "${active}" == "inactive" || "${active}" == "failed" || "${active}" == "activating" || "${active}" == "deactivating" ]]; then
+      warn "Service exists but is not currently running."
+      echo "Service: ${APP_NAME}.service"
+      echo "ActiveState: ${state:-unknown}"
+      echo "SubState: ${substate:-unknown}"
+      echo "is-active: ${active:-unknown}"
+      echo "Enabled: ${enabled:-unknown}"
+      echo
+      echo "Last log lines:"
+      journalctl -u "${APP_NAME}.service" -n 20 --no-pager 2>/dev/null || true
+      return
+    fi
   fi
 
-  if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
-    local pid started uptime_sec uptime_human
-    pid="$(cat "${PID_FILE}")"
-    started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')"
-    uptime_human="unknown"
+  if [[ -f "${PID_FILE}" ]]; then
+    local pid started uptimesec uptimehuman startepoch nowepoch d h m s
+    pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')"
+      uptimehuman="unknown"
 
-    if [[ -n "${started}" ]]; then
-      local start_epoch now_epoch d h m s
-      start_epoch="$(date -d "${started}" +%s 2>/dev/null || true)"
-      now_epoch="$(date +%s)"
-      if [[ -n "${start_epoch}" ]]; then
-        uptime_sec=$(( now_epoch - start_epoch ))
-        d=$(( uptime_sec / 86400 ))
-        h=$(( (uptime_sec % 86400) / 3600 ))
-        m=$(( (uptime_sec % 3600) / 60 ))
-        s=$(( uptime_sec % 60 ))
-        if (( d > 0 )); then
-          uptime_human="${d}d ${h}h ${m}m ${s}s"
-        elif (( h > 0 )); then
-          uptime_human="${h}h ${m}m ${s}s"
-        elif (( m > 0 )); then
-          uptime_human="${m}m ${s}s"
-        else
-          uptime_human="${s}s"
+      if [[ -n "${started}" ]]; then
+        startepoch="$(date -d "${started}" +%s 2>/dev/null || true)"
+        nowepoch="$(date +%s)"
+        if [[ -n "${startepoch}" ]]; then
+          uptimesec=$(( nowepoch - startepoch ))
+          d=$(( uptimesec / 86400 ))
+          h=$(( (uptimesec % 86400) / 3600 ))
+          m=$(( (uptimesec % 3600) / 60 ))
+          s=$(( uptimesec % 60 ))
+
+          if (( d > 0 )); then
+            uptimehuman="${d}d ${h}h ${m}m ${s}s"
+          elif (( h > 0 )); then
+            uptimehuman="${h}h ${m}m ${s}s"
+          elif (( m > 0 )); then
+            uptimehuman="${m}m ${s}s"
+          else
+            uptimehuman="${s}s"
+          fi
         fi
       fi
-    fi
 
-    ok "Background analysis is running via nohup."
-    echo "PID: ${pid}"
-    echo "Started: ${started:-unknown}"
-    echo "Uptime: ${uptime_human}"
-    echo "Log: ${NOHUP_LOG}"
-    return
+      ok "Background analysis is running via nohup."
+      echo "PID: ${pid}"
+      echo "Started: ${started:-unknown}"
+      echo "Uptime: ${uptimehuman}"
+      echo "Log: ${NOHUP_LOG}"
+      return
+    fi
   fi
 
   warn "No running background analysis found."

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="defcon-node-inspector"
+APP_NAME="defcon-network-inspector"
 APP_DIR="/opt/${APP_NAME}"
 STATE_DIR="/var/lib/${APP_NAME}"
 LOG_DIR="/var/log/${APP_NAME}"
@@ -80,7 +80,7 @@ write_runner() {
 cat > "${RUNNER_PATH}" <<'RUNNER'
 #!/usr/bin/env bash
 set -euo pipefail
-source /opt/defcon-node-inspector/env.sh
+source /opt/defcon-network-inspector/env.sh
 mkdir -p "${STATE_DIR}/snapshots" "${STATE_DIR}/reports" "${LOG_DIR}"
 
 while true; do
@@ -960,7 +960,7 @@ chmod +x "${ANALYZER_PATH}"
 write_service() {
 cat > "${SERVICE_FILE}" <<SERVICE
 [Unit]
-Description=DeFCoN Node Inspector background analyzer
+Description=DeFCoN Network Inspector background analyzer
 After=network-online.target
 Wants=network-online.target
 
@@ -1387,16 +1387,16 @@ install_app() {
 usage() {
 cat <<USAGE
 Usage:
-  bash defcon-node-inspector.sh                # installs on first run and shows the menu
-  bash defcon-node-inspector.sh menu
-  bash defcon-node-inspector.sh install
-  bash defcon-node-inspector.sh run-once
-  bash defcon-node-inspector.sh start
-  bash defcon-node-inspector.sh stop
-  bash defcon-node-inspector.sh status
-  bash defcon-node-inspector.sh report
-  bash defcon-node-inspector.sh problems
-  bash defcon-node-inspector.sh wipe
+  bash defcon-network-inspector.sh                # installs on first run and shows the menu
+  bash defcon-network-inspector.sh menu
+  bash defcon-network-inspector.sh install
+  bash defcon-network-inspector.sh run-once
+  bash defcon-network-inspector.sh start
+  bash defcon-network-inspector.sh stop
+  bash defcon-network-inspector.sh status
+  bash defcon-network-inspector.sh report
+  bash defcon-network-inspector.sh problems
+  bash defcon-network-inspector.sh wipe
 USAGE
 }
 

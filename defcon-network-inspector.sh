@@ -1008,7 +1008,7 @@ def write_html_report(path, summary, problem_nodes, operator_clusters, ip_cluste
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeFCoN Network Inspector Report</title>
 <style>
-:root {{ color-scheme: dark; --bg:#0b1220; --panel:#121a2b; --panel2:#1a2438; --text:#e8eefc; --muted:#9cb0d1; --good:#1fb981; --warn:#f3b54a; --bad:#ef5b5b; --blue:#b5d9ff; }}
+:root {{ color-scheme: dark; --bg:#0b1220; --panel:#121a2b; --panel2:#1a2438; --text:#e8eefc; --muted:#9cb0d1; --good:#1fb981; --warn:#f3b54a; --bad:#ef5b5b; --blue:#70e5f0; }}
 body {{ margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--text); }}
 .wrap {{ max-width:1280px; margin:0 auto; padding:24px; }}
 h1,h2,h3,h4 {{ margin:0 0 12px; }}

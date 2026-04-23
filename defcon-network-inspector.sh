@@ -44,7 +44,7 @@ HISTORY_RETENTION_DAYS="${HISTORY_RETENTION_DAYS:-$DEFAULT_HISTORY_RETENTION_DAY
 RPC_TIMEOUT_SECONDS="${RPC_TIMEOUT_SECONDS:-$DEFAULT_RPC_TIMEOUT_SECONDS}"
 MAX_CONSECUTIVE_FAILURES="${MAX_CONSECUTIVE_FAILURES:-$DEFAULT_MAX_CONSECUTIVE_FAILURES}"
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[1;36m'; NC='\033[0m'
 mkdir_p() { mkdir -p "$1"; }
 need_root() { [[ ${EUID} -eq 0 ]] || { echo -e "${RED}Please run as root: sudo bash $0${NC}"; exit 1; }; }
 info() { echo -e "${BLUE}[*]${NC} $*"; }
@@ -1008,7 +1008,7 @@ def write_html_report(path, summary, problem_nodes, operator_clusters, ip_cluste
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeFCoN Network Inspector Report</title>
 <style>
-:root {{ color-scheme: dark; --bg:#0b1220; --panel:#121a2b; --panel2:#1a2438; --text:#e8eefc; --muted:#9cb0d1; --good:#1fb981; --warn:#f3b54a; --bad:#ef5b5b; --blue:#70e5f0; }}
+:root {{ color-scheme: dark; --bg:#0b1220; --panel:#121a2b; --panel2:#1a2438; --text:#e8eefc; --muted:#9cb0d1; --good:#1fb981; --warn:#f3b54a; --bad:#ef5b5b; --blue:#5aa9ff; }}
 body {{ margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--text); }}
 .wrap {{ max-width:1280px; margin:0 auto; padding:24px; }}
 h1,h2,h3,h4 {{ margin:0 0 12px; }}

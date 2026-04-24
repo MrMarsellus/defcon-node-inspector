@@ -104,6 +104,12 @@ Important files include:
 - `community-contact-list.json`
 - `community-contact-list.csv`
 
+Download:
+
+```bash
+scp USER@HOST:/var/lib/defcon-network-inspector/reports/latest-report.html .
+```
+
 ## State and health files
 
 The script also stores runtime state under:

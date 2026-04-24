@@ -891,115 +891,446 @@ def write_csv(path, rows, cols):
 
 
 def write_text_report(path, summary, problem_nodes, operator_clusters, ip_clusters, subnet_clusters, waves, contact_list):
+    def to_int(v, default=0):
+        try:
+            return int(v)
+        except Exception:
+            return default
+
+    def pct(part, whole):
+        try:
+            part = float(part or 0)
+            whole = float(whole or 0)
+            if whole <= 0:
+                return "0.0%"
+            return f"{(part / whole) * 100:.1f}%"
+        except Exception:
+            return "0.0%"
+
+    def short_hex(v, left=12, right=10):
+        s = str(v or "")
+        if len(s) <= left + right + 3:
+            return s or "n/a"
+        return f"{s[:left]}...{s[-right:]}"
+
+    total_nodes = to_int(summary.get("total_nodes"))
+    problem_count = to_int(summary.get("problem_nodes"))
+    pose_banned = to_int(summary.get("pose_banned"))
+
+    root_cause_counts = defaultdict(int)
+    evidence_counts = defaultdict(int)
+    status_counts = defaultdict(int)
+
+    for r in problem_nodes:
+        root_cause_counts[str(r.get("suspected_root_cause") or "unknown")] += 1
+        evidence_counts[str(r.get("evidence_level") or "unknown")] += 1
+        status_counts[str(r.get("status") or "unknown")] += 1
+
+    sorted_root_causes = sorted(root_cause_counts.items(), key=lambda x: (-x[1], x[0]))
+    sorted_evidence = sorted(evidence_counts.items(), key=lambda x: (-x[1], x[0]))
+    sorted_status = sorted(status_counts.items(), key=lambda x: (-x[1], x[0]))
+
+    dominant_cause = sorted_root_causes[0][0] if sorted_root_causes else "unknown"
+    dominant_cause_count = sorted_root_causes[0][1] if sorted_root_causes else 0
+
     lines = [
-        'DeFCoN Network Inspector Report',
-        '================================',
-        f"Timestamp UTC: {summary['timestamp']}",
-        f"Total nodes: {summary['total_nodes']}",
-        f"Problematic nodes: {summary['problem_nodes']}",
-        f"POSE_BANNED: {summary['pose_banned']}",
-        f"Operator clusters: {summary['operator_clusters']}",
-        f"IP clusters: {summary['ip_clusters']}",
-        f"Subnet clusters: {summary['subnet_clusters']}",
-        f"PoSe ban waves: {summary['pose_ban_waves']}",
-        f"Community contacts: {summary['community_contacts']}",
-        '',
-        'Top suspicious nodes',
-        '--------------------------------',
+        "DeFCoN Network Inspector Report",
+        "================================",
+        f"Timestamp UTC: {summary.get('timestamp', 'unknown')}",
+        "",
+        "Executive summary",
+        "--------------------------------",
+        f"POSE_BANNED: {pose_banned}/{total_nodes} ({pct(pose_banned, total_nodes)})",
+        f"Problematic nodes: {problem_count}/{total_nodes} ({pct(problem_count, total_nodes)})",
+        f"Dominant suspected root cause: {dominant_cause} ({dominant_cause_count} nodes)",
+        f"Operator clusters: {summary.get('operator_clusters', 0)}",
+        f"IP clusters: {summary.get('ip_clusters', 0)}",
+        f"Subnet clusters: {summary.get('subnet_clusters', 0)}",
+        f"PoSe ban waves: {summary.get('pose_ban_waves', 0)}",
+        f"Community contact targets: {summary.get('community_contacts', 0)}",
+        "",
+        "Dominant root causes",
+        "--------------------------------",
     ]
 
-    for row in problem_nodes[:80]:
-        lines.append(f"Node: {row.get('protx_hash') or row.get('outpoint') or row.get('service')}")
-        lines.append(f"  Status: {row.get('status')}")
-        lines.append(f"  Service: {row.get('service')}")
-        lines.append(f"  IP: {row.get('service_ip')}")
-        lines.append(f"  Operator: {row.get('operator_pubkey')}")
-        lines.append(f"  Evidence: {row.get('evidence_level')} | Score: {row.get('problem_score')} | Cause: {row.get('suspected_root_cause')}")
-        for p in row.get('problems', []):
-            lines.append(f"  Problem: {p}")
-        for fx in row.get('recommended_fix', []):
-            lines.append(f"  Action: {fx}")
-        lines.append('')
+    if sorted_root_causes:
+        for cause, count in sorted_root_causes[:10]:
+            lines.append(f"- {cause}: {count} nodes")
+    else:
+        lines.append("- None")
 
-    lines += ['', 'Suspect operator clusters', '--------------------------------']
-    for c in operator_clusters[:50]:
-        ids = ', '.join([x.get('protx_hash') or '?' for x in c.get('nodes', [])[:12]])
-        lines.append(f"{c['operator_pubkey']} -> {c['pose_banned']}/{c['total_nodes']} POSE_BANNED | Evidence: {c['evidence_level']} | Nodes: {ids}")
+    lines += ["", "Evidence levels", "--------------------------------"]
+    if sorted_evidence:
+        for level, count in sorted_evidence[:10]:
+            lines.append(f"- {level}: {count} nodes")
+    else:
+        lines.append("- None")
 
-    lines += ['', 'Suspect IP clusters', '--------------------------------']
-    for c in ip_clusters[:50]:
-        ids = ', '.join([x.get('protx_hash') or '?' for x in c.get('nodes', [])[:12]])
-        lines.append(f"{c['service_ip']} -> {c['pose_banned']}/{c['total_nodes']} POSE_BANNED | Evidence: {c['evidence_level']} | Nodes: {ids}")
+    lines += ["", "Problem node statuses", "--------------------------------"]
+    if sorted_status:
+        for status, count in sorted_status[:10]:
+            lines.append(f"- {status}: {count} nodes")
+    else:
+        lines.append("- None")
 
-    lines += ['', 'Suspect subnet clusters', '--------------------------------']
-    for c in subnet_clusters[:50]:
-        lines.append(f"{c['service_subnet']} -> {c['pose_banned']}/{c['total_nodes']} POSE_BANNED | Evidence: {c['evidence_level']}")
+    lines += ["", "Top suspicious nodes", "--------------------------------"]
+    if problem_nodes:
+        for row in problem_nodes[:60]:
+            lines.append(f"Node: {row.get('protx_hash') or row.get('service') or 'unknown'}")
+            lines.append(f"  Status: {row.get('status') or 'unknown'}")
+            lines.append(f"  Service: {row.get('service') or 'n/a'}")
+            lines.append(f"  IP: {row.get('service_ip') or 'n/a'}")
+            lines.append(f"  Subnet: {row.get('service_subnet') or 'n/a'}")
+            lines.append(f"  Operator: {row.get('operator_pubkey') or 'n/a'}")
+            lines.append(f"  Owner: {row.get('owner_address') or 'n/a'}")
+            lines.append(f"  Evidence: {row.get('evidence_level') or 'unknown'}")
+            lines.append(f"  Cause: {row.get('suspected_root_cause') or 'unknown'}")
+            lines.append(f"  Score: {row.get('problem_score') or 0}")
 
-    lines += ['', 'Recent PoSe ban waves', '--------------------------------']
-    for w in waves[:30]:
-        lines.append(f"{w['started_at']} -> {w['total_nodes']} nodes within {w['window_seconds']}s")
-        if w.get('dominant_operator_clusters'):
-            lines.append("  Dominant operators: " + ', '.join(f"{x['operator_pubkey']} ({x['count']})" for x in w['dominant_operator_clusters']))
-        if w.get('dominant_subnets'):
-            lines.append("  Dominant subnets: " + ', '.join(f"{x['subnet']} ({x['count']})" for x in w['dominant_subnets']))
+            problems = row.get("problems", [])
+            fixes = row.get("recommended_fix", [])
 
-    lines += ['', 'Community contact list', '--------------------------------']
-    for item in contact_list[:100]:
-        lines.append(f"{item.get('service_ip')} -> {item.get('protx_hash')} | {item.get('status')} | {item.get('evidence_level')} | {'; '.join(item.get('reasons', []))}")
+            if problems:
+                lines.append("  Why suspicious:")
+                for p in problems:
+                    lines.append(f"    - {p}")
+            else:
+                lines.append("  Why suspicious: None")
 
-    path.write_text('\n'.join(lines))
+            if fixes:
+                lines.append("  Suggested action:")
+                for fx in fixes:
+                    lines.append(f"    - {fx}")
+            else:
+                lines.append("  Suggested action: None")
 
+            lines.append("")
+    else:
+        lines.append("No problematic nodes found.")
+
+    lines += ["", "Top operator clusters", "--------------------------------"]
+    if operator_clusters:
+        for c in operator_clusters[:20]:
+            sample_nodes = ", ".join(
+                (x.get("protx_hash") or x.get("service") or "unknown")
+                for x in c.get("nodes", [])[:5]
+            ) or "None"
+            lines.append(f"Operator key: {c.get('operator_pubkey') or 'unknown'}")
+            lines.append(f"  Banned: {c.get('pose_banned', 0)}/{c.get('total_nodes', 0)}")
+            lines.append(f"  Evidence: {c.get('evidence_level') or 'unknown'}")
+            lines.append(f"  Cause: {c.get('suspected_root_cause') or 'unknown'}")
+            lines.append(f"  Sample nodes: {sample_nodes}")
+            lines.append("")
+    else:
+        lines.append("None")
+
+    lines += ["", "Top IP clusters", "--------------------------------"]
+    if ip_clusters:
+        for c in ip_clusters[:20]:
+            sample_nodes = ", ".join(
+                (x.get("protx_hash") or x.get("service") or "unknown")
+                for x in c.get("nodes", [])[:5]
+            ) or "None"
+            lines.append(f"Service IP: {c.get('service_ip') or 'unknown'}")
+            lines.append(f"  Banned: {c.get('pose_banned', 0)}/{c.get('total_nodes', 0)}")
+            lines.append(f"  Evidence: {c.get('evidence_level') or 'unknown'}")
+            lines.append(f"  Cause: {c.get('suspected_root_cause') or 'unknown'}")
+            lines.append(f"  Sample nodes: {sample_nodes}")
+            lines.append("")
+    else:
+        lines.append("None")
+
+    lines += ["", "Top subnet clusters", "--------------------------------"]
+    if subnet_clusters:
+        for c in subnet_clusters[:20]:
+            sample_nodes = ", ".join(
+                (x.get("protx_hash") or x.get("service_ip") or "unknown")
+                for x in c.get("nodes", [])[:5]
+            ) or "None"
+            lines.append(f"Subnet: {c.get('service_subnet') or 'unknown'}")
+            lines.append(f"  Banned: {c.get('pose_banned', 0)}/{c.get('total_nodes', 0)}")
+            lines.append(f"  Evidence: {c.get('evidence_level') or 'unknown'}")
+            lines.append(f"  Cause: {c.get('suspected_root_cause') or 'unknown'}")
+            lines.append(f"  Sample nodes: {sample_nodes}")
+            lines.append("")
+    else:
+        lines.append("None")
+
+    lines += ["", "PoSe ban waves", "--------------------------------"]
+    if waves:
+        for w in waves[:20]:
+            lines.append(f"Started at: {w.get('started_at') or 'unknown'}")
+            lines.append(f"  Window: {w.get('window_seconds') or 0}s")
+            lines.append(f"  Total nodes: {w.get('total_nodes') or 0}")
+
+            dominant_ops = w.get("dominant_operator_clusters", [])
+            if dominant_ops:
+                lines.append("  Dominant operators:")
+                for x in dominant_ops[:10]:
+                    lines.append(f"    - {x.get('operator_pubkey')}: {x.get('count')}")
+            else:
+                lines.append("  Dominant operators: None")
+
+            dominant_subnets = w.get("dominant_subnets", [])
+            if dominant_subnets:
+                lines.append("  Dominant subnets:")
+                for x in dominant_subnets[:10]:
+                    lines.append(f"    - {x.get('subnet')}: {x.get('count')}")
+            else:
+                lines.append("  Dominant subnets: None")
+
+            sample_nodes = ", ".join(
+                (x.get("protx_hash") or x.get("service") or "unknown")
+                for x in w.get("nodes", [])[:5]
+            ) or "None"
+            lines.append(f"  Sample nodes: {sample_nodes}")
+            lines.append("")
+    else:
+        lines.append("None")
+
+    lines += ["", "Community contact list", "--------------------------------"]
+    if contact_list:
+        for item in contact_list[:80]:
+            lines.append(f"Service IP: {item.get('service_ip') or 'unknown'}")
+            lines.append(f"  Node: {item.get('protx_hash') or 'unknown'}")
+            lines.append(f"  Status: {item.get('status') or 'unknown'}")
+            lines.append(f"  Evidence: {item.get('evidence_level') or 'unknown'}")
+            lines.append(f"  Service: {item.get('service') or 'n/a'}")
+            lines.append(f"  Operator: {short_hex(item.get('operator_pubkey'))}")
+            reasons = item.get("reasons", [])
+            if reasons:
+                lines.append("  Why contact:")
+                for r in reasons:
+                    lines.append(f"    - {r}")
+            else:
+                lines.append("  Why contact: None")
+            lines.append("")
+    else:
+        lines.append("None")
+
+    lines += [
+        "",
+        "Notes",
+        "--------------------------------",
+        "This report shows visible RPC-derived patterns and historical PoSe-ban correlations.",
+        "It highlights likely misconfiguration groups, but it does not prove private-key ownership or operator intent.",
+    ]
+
+    path.write_text("\n".join(lines))
 
 def write_html_report(path, summary, problem_nodes, operator_clusters, ip_clusters, subnet_clusters, waves, contact_list):
-    cards = []
-    for title, value, cls in [
-        ('Total nodes', summary['total_nodes'], 'neutral'),
-        ('Problematic nodes', summary['problem_nodes'], 'warn'),
-        ('POSE_BANNED', summary['pose_banned'], 'bad'),
-        ('Operator clusters', summary['operator_clusters'], 'warn'),
-        ('IP clusters', summary['ip_clusters'], 'warn'),
-        ('Ban waves', summary['pose_ban_waves'], 'bad'),
-        ('Contact targets', summary['community_contacts'], 'neutral'),
-    ]:
-        cards.append(f'<div class=\"card {cls}\"><div class=\"label\">{esc(title)}</div><div class=\"value\">{esc(value)}</div></div>')
+    def to_int(v, default=0):
+        try:
+            return int(v)
+        except Exception:
+            return default
 
-    nodes_html = []
-    for r in problem_nodes[:120]:
-        problems = ''.join(f'<li>{esc(x)}</li>' for x in r.get('problems', []))
-        fixes = ''.join(f'<li>{esc(x)}</li>' for x in r.get('recommended_fix', []))
-        nodes_html.append(f'''
-        <div class=\"node\">
-          <h3>{esc(r.get('protx_hash') or r.get('service'))}</h3>
-          <div class=\"meta\">
-            <span>Status: {esc(r.get('status'))}</span>
-            <span>IP: {esc(r.get('service_ip'))}</span>
-            <span>Evidence: {esc(r.get('evidence_level'))}</span>
-            <span>Cause: {esc(r.get('suspected_root_cause'))}</span>
-            <span>Score: {esc(r.get('problem_score'))}</span>
-          </div>
-          <p><strong>Service:</strong> {esc(r.get('service'))}<br><strong>Operator:</strong> {esc(r.get('operator_pubkey'))}</p>
-          <div class=\"cols\">
-            <div><h4>Why suspicious</h4><ul>{problems or "<li>None</li>"}</ul></div>
-            <div><h4>Suggested action</h4><ul>{fixes or "<li>None</li>"}</ul></div>
-          </div>
+    def short_hex(v, left=12, right=10):
+        s = str(v or '')
+        if len(s) <= left + right + 3:
+            return s or 'n/a'
+        return f'{s[:left]}...{s[-right:]}'
+
+    def pct(part, whole):
+        try:
+            part = float(part or 0)
+            whole = float(whole or 0)
+            if whole <= 0:
+                return '0.0%'
+            return f'{(part / whole) * 100:.1f}%'
+        except Exception:
+            return '0.0%'
+
+    total_nodes = to_int(summary.get('total_nodes'))
+    problem_count = to_int(summary.get('problem_nodes'))
+    pose_banned = to_int(summary.get('pose_banned'))
+
+    root_cause_counts = defaultdict(int)
+    evidence_counts = defaultdict(int)
+    status_counts = defaultdict(int)
+
+    for r in problem_nodes:
+        root_cause_counts[str(r.get('suspected_root_cause') or 'unknown')] += 1
+        evidence_counts[str(r.get('evidence_level') or 'unknown')] += 1
+        status_counts[str(r.get('status') or 'unknown')] += 1
+
+    sorted_root_causes = sorted(root_cause_counts.items(), key=lambda x: (-x[1], x[0]))
+    sorted_evidence = sorted(evidence_counts.items(), key=lambda x: (-x[1], x[0]))
+    sorted_status = sorted(status_counts.items(), key=lambda x: (-x[1], x[0]))
+
+    dominant_cause = sorted_root_causes[0][0] if sorted_root_causes else 'unknown'
+    dominant_cause_count = sorted_root_causes[0][1] if sorted_root_causes else 0
+
+    summary_text = (
+        f'{pose_banned} of {total_nodes} masternodes are currently POSE_BANNED '
+        f'({pct(pose_banned, total_nodes)} of the observed network). '
+        f'{problem_count} nodes are currently classified as problematic '
+        f'({pct(problem_count, total_nodes)} of all nodes). '
+        f'The most common suspected root cause in this snapshot is '
+        f'"{dominant_cause}" affecting {dominant_cause_count} nodes.'
+    )
+
+    cards = []
+    for title, value, sub, cls in [
+        ('Total nodes', total_nodes, 'Observed in current snapshot', 'neutral'),
+        ('Problematic nodes', problem_count, pct(problem_count, total_nodes), 'warn'),
+        ('POSE_BANNED', pose_banned, pct(pose_banned, total_nodes), 'bad'),
+        ('Operator clusters', to_int(summary.get('operator_clusters')), 'Repeated operator keys', 'warn'),
+        ('IP clusters', to_int(summary.get('ip_clusters')), 'Shared service IPs', 'warn'),
+        ('Subnet clusters', to_int(summary.get('subnet_clusters')), 'Grouped by subnet', 'neutral'),
+        ('Ban waves', to_int(summary.get('pose_ban_waves')), 'Grouped PoSe events', 'bad'),
+        ('Contact targets', to_int(summary.get('community_contacts')), 'Nodes to notify', 'neutral'),
+    ]:
+        cards.append(f'''
+        <div class="card {cls}">
+          <div class="label">{esc(title)}</div>
+          <div class="value">{esc(value)}</div>
+          <div class="subvalue">{esc(sub)}</div>
         </div>
         ''')
 
-    def cluster_list(items, key):
+    root_causes_html = ''.join(
+        f'<li><span class="mono">{esc(cause)}</span><span>{esc(count)} nodes</span></li>'
+        for cause, count in sorted_root_causes[:8]
+    ) or '<li><span>None</span><span>0</span></li>'
+
+    evidence_html = ''.join(
+        f'<li><span class="mono">{esc(level)}</span><span>{esc(count)} nodes</span></li>'
+        for level, count in sorted_evidence[:8]
+    ) or '<li><span>None</span><span>0</span></li>'
+
+    status_html = ''.join(
+        f'<li><span class="mono">{esc(status)}</span><span>{esc(count)} nodes</span></li>'
+        for status, count in sorted_status[:8]
+    ) or '<li><span>None</span><span>0</span></li>'
+
+    nodes_html = []
+    for r in problem_nodes[:120]:
+        problems = ''.join(f'<li>{esc(x)}</li>' for x in r.get('problems', [])) or '<li>None</li>'
+        fixes = ''.join(f'<li>{esc(x)}</li>' for x in r.get('recommended_fix', [])) or '<li>None</li>'
+
+        nodes_html.append(f'''
+        <article class="node">
+          <div class="node-head">
+            <h3 class="mono">{esc(r.get('protx_hash') or r.get('service') or 'unknown')}</h3>
+            <span class="pill {esc(str(r.get('evidence_level') or 'neutral').lower())}">{esc(r.get('evidence_level') or 'unknown')}</span>
+          </div>
+          <div class="meta">
+            <span>Status: {esc(r.get('status') or 'unknown')}</span>
+            <span>IP: <span class="mono">{esc(r.get('service_ip') or 'n/a')}</span></span>
+            <span>Subnet: <span class="mono">{esc(r.get('service_subnet') or 'n/a')}</span></span>
+            <span>Cause: <span class="mono">{esc(r.get('suspected_root_cause') or 'unknown')}</span></span>
+            <span>Score: {esc(r.get('problem_score') or 0)}</span>
+          </div>
+
+          <div class="kv">
+            <div><span class="k">Service</span><span class="v mono">{esc(r.get('service') or 'n/a')}</span></div>
+            <div><span class="k">Operator</span><span class="v mono">{esc(r.get('operator_pubkey') or 'n/a')}</span></div>
+            <div><span class="k">Owner</span><span class="v mono">{esc(r.get('owner_address') or 'n/a')}</span></div>
+            <div><span class="k">Outpoint</span><span class="v mono">{esc(r.get('outpoint') or 'n/a')}</span></div>
+          </div>
+
+          <div class="cols">
+            <div>
+              <h4>Why suspicious</h4>
+              <ul>{problems}</ul>
+            </div>
+            <div>
+              <h4>Suggested action</h4>
+              <ul>{fixes}</ul>
+            </div>
+          </div>
+        </article>
+        ''')
+
+    def cluster_cards(items, key, label):
         out = []
-        for c in items[:80]:
-            out.append(f"<li><strong>{esc(c.get(key))}</strong> → {esc(c.get('pose_banned'))}/{esc(c.get('total_nodes'))} banned ({esc(c.get('evidence_level'))})</li>")
-        return ''.join(out) or '<li>None</li>'
+        for c in items[:24]:
+            sample_nodes = ''.join(
+                f'<li class="mono">{esc(x.get("protx_hash") or x.get("service") or "unknown")}</li>'
+                for x in c.get('nodes', [])[:5]
+            ) or '<li>None</li>'
+
+            out.append(f'''
+            <article class="panel cluster-card">
+              <div class="node-head">
+                <h3 class="mono">{esc(c.get(key) or 'unknown')}</h3>
+                <span class="pill {esc(str(c.get("evidence_level") or "neutral").lower())}">{esc(c.get("evidence_level") or "unknown")}</span>
+              </div>
+              <div class="meta">
+                <span>{esc(label)}: <span class="mono">{esc(c.get(key) or 'unknown')}</span></span>
+                <span>Banned: {esc(c.get('pose_banned') or 0)}/{esc(c.get('total_nodes') or 0)}</span>
+                <span>Cause: <span class="mono">{esc(c.get('suspected_root_cause') or 'unknown')}</span></span>
+              </div>
+              <h4>Sample nodes</h4>
+              <ul>{sample_nodes}</ul>
+            </article>
+            ''')
+        return ''.join(out) or '<div class="panel">None</div>'
 
     waves_html = []
     for w in waves[:40]:
-        ops = ', '.join(f"{x['operator_pubkey']} ({x['count']})" for x in w.get('dominant_operator_clusters', [])) or 'None'
-        subnets = ', '.join(f"{x['subnet']} ({x['count']})" for x in w.get('dominant_subnets', [])) or 'None'
-        waves_html.append(f"<li><strong>{esc(w['started_at'])}</strong> → {esc(w['total_nodes'])} nodes in {esc(w['window_seconds'])}s | Operators: {esc(ops)} | Subnets: {esc(subnets)}</li>")
+        ops = ''.join(
+            f'<li><span class="mono">{esc(short_hex(x.get("operator_pubkey")))}</span><span>{esc(x.get("count"))}</span></li>'
+            for x in w.get('dominant_operator_clusters', [])
+        ) or '<li><span>None</span><span>0</span></li>'
+
+        subnets = ''.join(
+            f'<li><span class="mono">{esc(x.get("subnet"))}</span><span>{esc(x.get("count"))}</span></li>'
+            for x in w.get('dominant_subnets', [])
+        ) or '<li><span>None</span><span>0</span></li>'
+
+        sample_nodes = ''.join(
+            f'<li class="mono">{esc(x.get("protx_hash") or x.get("service") or "unknown")}</li>'
+            for x in w.get('nodes', [])[:5]
+        ) or '<li>None</li>'
+
+        waves_html.append(f'''
+        <article class="panel wave-card">
+          <div class="node-head">
+            <h3>{esc(w.get("started_at") or "unknown")}</h3>
+            <span class="pill bad">{esc(w.get("total_nodes") or 0)} nodes</span>
+          </div>
+          <div class="meta">
+            <span>Window: {esc(w.get("window_seconds") or 0)}s</span>
+            <span>Total nodes: {esc(w.get("total_nodes") or 0)}</span>
+          </div>
+          <div class="cols">
+            <div>
+              <h4>Dominant operators</h4>
+              <ul class="statlist">{ops}</ul>
+            </div>
+            <div>
+              <h4>Dominant subnets</h4>
+              <ul class="statlist">{subnets}</ul>
+            </div>
+          </div>
+          <h4>Sample nodes</h4>
+          <ul>{sample_nodes}</ul>
+        </article>
+        ''')
 
     contact_html = []
-    for item in contact_list[:120]:
-        contact_html.append(f"<li><strong>{esc(item.get('service_ip'))}</strong> → {esc(item.get('protx_hash'))} | {esc(item.get('status'))} | {esc(item.get('evidence_level'))} | {esc('; '.join(item.get('reasons', [])))}</li>")
+    for item in contact_list[:80]:
+        reasons = ''.join(f'<li>{esc(x)}</li>' for x in item.get('reasons', [])) or '<li>None</li>'
+        contact_html.append(f'''
+        <article class="panel contact-card">
+          <div class="node-head">
+            <h3 class="mono">{esc(item.get('service_ip') or 'unknown')}</h3>
+            <span class="pill {esc(str(item.get('evidence_level') or 'neutral').lower())}">{esc(item.get('evidence_level') or 'unknown')}</span>
+          </div>
+          <div class="meta">
+            <span>Status: {esc(item.get('status') or 'unknown')}</span>
+            <span>Node: <span class="mono">{esc(short_hex(item.get('protx_hash')))}</span></span>
+          </div>
+          <div class="kv">
+            <div><span class="k">Service</span><span class="v mono">{esc(item.get('service') or 'n/a')}</span></div>
+            <div><span class="k">Operator</span><span class="v mono">{esc(short_hex(item.get('operator_pubkey')))}</span></div>
+          </div>
+          <h4>Why contact</h4>
+          <ul>{reasons}</ul>
+        </article>
+        ''')
 
     html_doc = f'''<!doctype html>
 <html lang="en">
@@ -1008,43 +1339,362 @@ def write_html_report(path, summary, problem_nodes, operator_clusters, ip_cluste
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeFCoN Network Inspector Report</title>
 <style>
-:root {{ color-scheme: dark; --bg:#0b1220; --panel:#121a2b; --panel2:#1a2438; --text:#e8eefc; --muted:#9cb0d1; --good:#1fb981; --warn:#f3b54a; --bad:#ef5b5b; --blue:#5aa9ff; }}
-body {{ margin:0; font-family:Arial,sans-serif; background:var(--bg); color:var(--text); }}
-.wrap {{ max-width:1280px; margin:0 auto; padding:24px; }}
-h1,h2,h3,h4 {{ margin:0 0 12px; }}
-.grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin:18px 0 28px; }}
-.card,.node,.panel {{ background:var(--panel); border:1px solid #26324c; border-radius:14px; padding:16px; box-shadow:0 8px 30px rgba(0,0,0,.25); }}
-.card.warn {{ border-color:#7a5a18; }} .card.bad {{ border-color:#7a2222; }} .card.neutral {{ border-color:#294266; }}
-.label {{ color:var(--muted); font-size:13px; margin-bottom:8px; }} .value {{ font-size:30px; font-weight:bold; }}
-.meta {{ display:flex; flex-wrap:wrap; gap:12px; color:var(--muted); font-size:14px; margin-bottom:10px; }}
-.cols {{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }}
-ul {{ margin:8px 0 0 18px; }}
-.section {{ margin-top:30px; }}
-.smallgrid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }}
-@media (max-width: 800px) {{ .cols {{ grid-template-columns:1fr; }} }}
+:root {{
+  color-scheme: dark;
+  --bg:#0b1220;
+  --panel:#121a2b;
+  --panel2:#182239;
+  --panel3:#1f2b45;
+  --text:#e8eefc;
+  --muted:#9cb0d1;
+  --faint:#7283a8;
+  --good:#1fb981;
+  --warn:#f3b54a;
+  --bad:#ef5b5b;
+  --blue:#8ec5ff;
+  --border:#26324c;
+  --border-soft:#31425f;
+  --shadow:0 10px 30px rgba(0,0,0,.22);
+}}
+
+* {{ box-sizing:border-box; }}
+html {{ scroll-behavior:smooth; }}
+body {{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:linear-gradient(180deg, #0b1220 0%, #0f1727 100%);
+  color:var(--text);
+  line-height:1.5;
+}}
+
+.wrap {{ max-width:1360px; margin:0 auto; padding:24px; }}
+h1,h2,h3,h4 {{ margin:0 0 12px; line-height:1.2; }}
+h1 {{ font-size:34px; }}
+h2 {{ font-size:24px; margin-bottom:14px; }}
+h3 {{ font-size:18px; }}
+h4 {{ font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }}
+
+p {{ margin:0; }}
+a {{ color:var(--blue); }}
+code,.mono {{
+  font-family:Consolas, Monaco, 'Courier New', monospace;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}}
+
+.hero {{
+  display:grid;
+  gap:18px;
+  margin-bottom:24px;
+}}
+
+.hero-top {{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}}
+
+.subtitle {{
+  color:var(--muted);
+  font-size:15px;
+}}
+
+.summary-box {{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  box-shadow:var(--shadow);
+}}
+
+.grid {{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:16px;
+  margin:20px 0 28px;
+}}
+
+.smallgrid {{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:16px;
+}}
+
+.card,.node,.panel {{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:var(--shadow);
+}}
+
+.card {{
+  min-height:120px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}}
+
+.card.warn {{ border-color:#7a5a18; }}
+.card.bad {{ border-color:#7a2222; }}
+.card.neutral {{ border-color:#294266; }}
+
+.label {{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:8px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}}
+
+.value {{
+  font-size:32px;
+  font-weight:bold;
+}}
+
+.subvalue {{
+  color:var(--faint);
+  font-size:13px;
+  margin-top:8px;
+}}
+
+.meta {{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 14px;
+  color:var(--muted);
+  font-size:14px;
+  margin-bottom:12px;
+}}
+
+.meta span {{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:999px;
+  padding:6px 10px;
+}}
+
+.section {{
+  margin-top:32px;
+}}
+
+.section-head {{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}}
+
+.section-note {{
+  color:var(--faint);
+  font-size:13px;
+}}
+
+.cols {{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+}}
+
+.kv {{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:10px 16px;
+  margin:12px 0 14px;
+}}
+
+.kv > div {{
+  background:var(--panel2);
+  border:1px solid var(--border-soft);
+  border-radius:12px;
+  padding:10px 12px;
+}}
+
+.k {{
+  display:block;
+  color:var(--faint);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  margin-bottom:4px;
+}}
+
+.v {{
+  display:block;
+  color:var(--text);
+  font-size:14px;
+}}
+
+.node + .node {{
+  margin-top:16px;
+}}
+
+.node-head {{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}}
+
+.pill {{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:72px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:bold;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  border:1px solid var(--border-soft);
+  background:var(--panel2);
+  color:var(--text);
+}}
+
+.pill.critical {{ background:rgba(239,91,91,.12); color:#ffb1b1; border-color:rgba(239,91,91,.35); }}
+.pill.strong {{ background:rgba(243,181,74,.12); color:#ffd98b; border-color:rgba(243,181,74,.35); }}
+.pill.moderate {{ background:rgba(142,197,255,.12); color:#bfe0ff; border-color:rgba(142,197,255,.35); }}
+.pill.good {{ background:rgba(31,185,129,.12); color:#89f0c5; border-color:rgba(31,185,129,.35); }}
+.pill.warn {{ background:rgba(243,181,74,.12); color:#ffd98b; border-color:rgba(243,181,74,.35); }}
+.pill.bad {{ background:rgba(239,91,91,.12); color:#ffb1b1; border-color:rgba(239,91,91,.35); }}
+.pill.neutral, .pill.unknown {{ background:rgba(142,197,255,.10); color:#bfe0ff; border-color:rgba(142,197,255,.25); }}
+
+ul {{
+  margin:8px 0 0 18px;
+  padding:0;
+}}
+
+li {{
+  margin:4px 0;
+}}
+
+.statlist {{
+  list-style:none;
+  margin:8px 0 0;
+  padding:0;
+}}
+
+.statlist li {{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}}
+
+.statlist li:last-child {{
+  border-bottom:0;
+}}
+
+.footer-note {{
+  margin-top:26px;
+  color:var(--faint);
+  font-size:13px;
+}}
+
+@media (max-width: 900px) {{
+  .cols {{ grid-template-columns:1fr; }}
+  .hero-top {{ align-items:flex-start; }}
+}}
+
+@media (max-width: 640px) {{
+  .wrap {{ padding:16px; }}
+  .grid {{ grid-template-columns:1fr 1fr; }}
+  .smallgrid {{ grid-template-columns:1fr; }}
+  .meta {{ gap:8px; }}
+}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>DeFCoN Network Inspector</h1>
-  <p>Snapshot UTC: {esc(summary['timestamp'])}</p>
+  <section class="hero">
+    <div class="hero-top">
+      <div>
+        <h1>DeFCoN Network Inspector</h1>
+        <p class="subtitle">Snapshot UTC: {esc(summary.get('timestamp') or 'unknown')}</p>
+      </div>
+      <div class="section-note">Generated from masternodelist / protx snapshot data and retained PoSe-ban history</div>
+    </div>
+
+    <div class="summary-box">
+      <h2>Executive summary</h2>
+      <p>{esc(summary_text)}</p>
+    </div>
+  </section>
+
   <div class="grid">{''.join(cards)}</div>
 
+  <div class="section smallgrid">
+    <div class="panel">
+      <h2>Dominant root causes</h2>
+      <ul class="statlist">{root_causes_html}</ul>
+    </div>
+    <div class="panel">
+      <h2>Evidence levels</h2>
+      <ul class="statlist">{evidence_html}</ul>
+    </div>
+    <div class="panel">
+      <h2>Problem node statuses</h2>
+      <ul class="statlist">{status_html}</ul>
+    </div>
+  </div>
+
   <div class="section">
-    <h2>Top suspicious nodes</h2>
+    <div class="section-head">
+      <h2>Top suspicious nodes</h2>
+      <div class="section-note">Highest-priority nodes to inspect first</div>
+    </div>
     {''.join(nodes_html) if nodes_html else '<div class="panel">No problematic nodes found.</div>'}
   </div>
 
-  <div class="section smallgrid">
-    <div class="panel"><h2>Operator clusters</h2><ul>{cluster_list(operator_clusters, 'operator_pubkey')}</ul></div>
-    <div class="panel"><h2>IP clusters</h2><ul>{cluster_list(ip_clusters, 'service_ip')}</ul></div>
-    <div class="panel"><h2>Subnet clusters</h2><ul>{cluster_list(subnet_clusters, 'service_subnet')}</ul></div>
+  <div class="section">
+    <div class="section-head">
+      <h2>Operator clusters</h2>
+      <div class="section-note">Repeated operator keys across multiple nodes</div>
+    </div>
+    <div class="smallgrid">{cluster_cards(operator_clusters, 'operator_pubkey', 'Operator key')}</div>
   </div>
 
-  <div class="section smallgrid">
-    <div class="panel"><h2>PoSe ban waves</h2><ul>{''.join(waves_html) or '<li>None</li>'}</ul></div>
-    <div class="panel"><h2>Community contact list</h2><ul>{''.join(contact_html) or '<li>None</li>'}</ul></div>
+  <div class="section">
+    <div class="section-head">
+      <h2>IP clusters</h2>
+      <div class="section-note">Shared service IPs used by multiple nodes</div>
+    </div>
+    <div class="smallgrid">{cluster_cards(ip_clusters, 'service_ip', 'Service IP')}</div>
   </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Subnet clusters</h2>
+      <div class="section-note">Grouped by network subnet for correlated outages or waves</div>
+    </div>
+    <div class="smallgrid">{cluster_cards(subnet_clusters, 'service_subnet', 'Subnet')}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>PoSe ban waves</h2>
+      <div class="section-note">Grouped historical PoSe events within the configured window</div>
+    </div>
+    <div class="smallgrid">{''.join(waves_html) if waves_html else '<div class="panel">No PoSe ban waves found.</div>'}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Community contact list</h2>
+      <div class="section-note">Nodes that should be reviewed or contacted first</div>
+    </div>
+    <div class="smallgrid">{''.join(contact_html) if contact_html else '<div class="panel">No contact targets found.</div>'}</div>
+  </div>
+
+  <p class="footer-note">
+    This report shows visible on-chain / RPC-derived patterns and historical PoSe-ban correlations. It highlights likely misconfiguration groups, but it does not prove private-key ownership or exact operator intent.
+  </p>
 </div>
 </body>
 </html>'''

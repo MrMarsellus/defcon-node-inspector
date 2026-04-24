@@ -1430,6 +1430,10 @@ code,.mono {{
   box-shadow:var(--shadow);
 }}
 
+.node {{
+  margin-bottom:10px;
+}}
+
 .card {{
   min-height:120px;
   display:flex;

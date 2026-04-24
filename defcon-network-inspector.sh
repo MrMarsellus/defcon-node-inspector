@@ -1430,10 +1430,6 @@ code,.mono {{
   box-shadow:var(--shadow);
 }}
 
-.node {{
-  margin-bottom:10px;
-}}
-
 .card {{
   min-height:120px;
   display:flex;
@@ -1474,10 +1470,23 @@ code,.mono {{
 }}
 
 .meta span {{
-  background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.05);
-  border-radius:999px;
-  padding:6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.05);
+  border-radius: 999px;
+  padding: 6px 10px;
+}}
+
+
+.meta span .mono {{
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 13px;
 }}
 
 .section {{
